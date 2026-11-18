@@ -5,7 +5,7 @@ import shutil
 import pyfiglet
 from colorama import Fore, Style, init
 
-
+# tes
 init(autoreset=True)
 
 def bersihkan_layar():
