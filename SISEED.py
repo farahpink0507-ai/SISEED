@@ -1011,3 +1011,417 @@ def menuPengelolaanDataPemasok():
         else:
             print("\nPilihan tidak tersedia!")
 
+#REVA
+#6# TRANSAKSI PEMBELIAN BIBIT
+
+def transaksi_pembelian_bibit(id_users):
+    print("\n===== TRANSAKSI PEMBELIAN BIBIT =====")
+
+    conn, cur = connectDB()
+
+    try:
+        # Menampilkan data pemasok
+        tampilkan_pemasok()
+
+        id_pemasok = input("\nMasukkan ID pemasok: ")
+
+        cur.execute("""
+            SELECT id_pemasok, nama_pemasok
+            FROM pemasok
+            WHERE id_pemasok = %s
+        """, (id_pemasok,))
+
+        data_pemasok = cur.fetchone()
+
+        if data_pemasok is None:
+            print("Pemasok tidak ditemukan!")
+            return
+
+        # Menampilkan data bibit
+        tampilkanBibit()
+
+        id_bibit = input("\nMasukkan ID bibit yang dibeli: ")
+
+        cur.execute("""
+            SELECT id_bibit, nama_bibit, harga_beli, stok
+            FROM bibit
+            WHERE id_bibit = %s
+        """, (id_bibit,))
+
+        data_bibit = cur.fetchone()
+
+        if data_bibit is None:
+            print("Bibit tidak ditemukan!")
+            return
+
+        nama_bibit = data_bibit[1]
+
+        # Memasukkan jumlah dan harga beli
+        jumlah = input_angka("Jumlah bibit yang dibeli: ")
+        harga_beli = input_angka("Harga beli per bibit: ")
+
+        if jumlah <= 0 or harga_beli <= 0:
+            print("Jumlah dan harga beli harus lebih dari 0!")
+            return
+
+        total = jumlah * harga_beli
+
+        print("\n===== KONFIRMASI PEMBELIAN =====")
+        print("Pemasok :", data_pemasok[1])
+        print("Bibit   :", nama_bibit)
+        print("Jumlah  :", jumlah)
+        print(f"Harga   : Rp{harga_beli:,}")
+        print(f"Total   : Rp{total:,}")
+
+        konfirmasi = input(
+            "\nSimpan transaksi? (ya/tidak): "
+        ).lower()
+
+        if konfirmasi == "ya":
+
+            # Menyimpan transaksi utama
+            cur.execute("""
+                INSERT INTO pembelian
+                (tanggal_pembelian, total_pembelian,
+                 jumlah, id_users, id_pemasok)
+                VALUES (CURRENT_DATE, %s, %s, %s, %s)
+                RETURNING id_pembelian
+            """, (
+                total,
+                jumlah,
+                id_users,
+                id_pemasok
+            ))
+
+            id_pembelian = cur.fetchone()[0]
+
+            # Menyimpan detail pembelian
+            cur.execute("""
+                INSERT INTO detail_pembelian
+                (jumlah_bibit, harga_beli,
+                 id_pembelian, id_bibit)
+                VALUES (%s, %s, %s, %s)
+            """, (
+                jumlah,
+                harga_beli,
+                id_pembelian,
+                id_bibit
+            ))
+
+            # Menambahkan stok bibit
+            cur.execute("""
+                UPDATE bibit
+                SET stok = stok + %s
+                WHERE id_bibit = %s
+            """, (jumlah, id_bibit))
+
+            conn.commit()
+
+            print("\nPembelian berhasil disimpan!")
+            print("Stok bibit berhasil ditambahkan.")
+
+        else:
+            conn.rollback()
+            print("Transaksi pembelian dibatalkan.")
+
+    except Exception as e:
+        conn.rollback()
+        print("Terjadi kesalahan:", e)
+
+    finally:
+        cur.close()
+        conn.close()
+
+# LAPORAN TOKO
+def laporan_toko():
+    print("\n========== LAPORAN TOKO BIBIT ==========")
+
+    conn, cur = connectDB()
+
+    try:
+        # Menghitung transaksi pembelian
+        cur.execute("""
+            SELECT
+                COUNT(*),
+                SUM(total_pembelian)
+            FROM pembelian
+        """)
+
+        data_pembelian = cur.fetchone()
+
+        jumlah_pembelian = data_pembelian[0]
+        total_pembelian = data_pembelian[1]
+
+        if total_pembelian is None:
+            total_pembelian = 0
+
+        # Menghitung transaksi penjualan
+        cur.execute("""
+            SELECT
+                COUNT(*),
+                SUM(total_penjualan),
+                SUM(jumlah)
+            FROM penjualan
+        """)
+
+        data_penjualan = cur.fetchone()
+
+        jumlah_penjualan = data_penjualan[0]
+        total_penjualan = data_penjualan[1]
+        jumlah_terjual = data_penjualan[2]
+
+        if total_penjualan is None:
+            total_penjualan = 0
+
+        if jumlah_terjual is None:
+            jumlah_terjual = 0
+
+        # Menampilkan ringkasan
+        print("\n===== RINGKASAN =====")
+        print("Jumlah transaksi pembelian :", jumlah_pembelian)
+        print("Jumlah transaksi penjualan :", jumlah_penjualan)
+        print("Total bibit terjual         :", jumlah_terjual)
+        print(f"Total pembelian             : Rp{total_pembelian:,}")
+        print(f"Total penjualan             : Rp{total_penjualan:,}")
+
+        # Menampilkan stok bibit
+        print("\n===== STOK BIBIT SAAT INI =====")
+
+        cur.execute("""
+            SELECT id_bibit, nama_bibit, stok
+            FROM bibit
+            ORDER BY id_bibit
+        """)
+
+        data_stok = cur.fetchall()
+
+        if len(data_stok) == 0:
+            print("Belum ada data bibit.")
+
+        else:
+            print("-" * 60)
+            print(f"{'ID Bibit':<12} {'Nama Bibit':<30} {'Stok':>10}")
+            print("-" * 60)
+
+            for data in data_stok:
+                print(
+                    f"{data[0]:<12} "
+                    f"{data[1]:<30} "
+                    f"{data[2]:>10}"
+                )
+
+        # Riwayat pembelian
+        print("\n===== RIWAYAT PEMBELIAN =====")
+
+        cur.execute("""
+            SELECT
+                p.tanggal_pembelian,
+                ps.nama_pemasok,
+                b.nama_bibit,
+                dp.jumlah_bibit,
+                p.total_pembelian
+            FROM pembelian p
+            JOIN pemasok ps
+                ON p.id_pemasok = ps.id_pemasok
+            JOIN detail_pembelian dp
+                ON p.id_pembelian = dp.id_pembelian
+            JOIN bibit b
+                ON dp.id_bibit = b.id_bibit
+            ORDER BY p.id_pembelian DESC
+        """)
+
+        riwayat_pembelian = cur.fetchall()
+
+        if len(riwayat_pembelian) == 0:
+            print("Belum ada transaksi pembelian.")
+
+        else:
+            for data in riwayat_pembelian:
+                print("------------------------------")
+                print("Tanggal :", data[0])
+                print("Pemasok :", data[1])
+                print("Bibit   :", data[2])
+                print("Jumlah  :", data[3])
+                print(f"Total   : Rp{data[4]:,}")
+
+        # Riwayat penjualan
+        print("\n===== RIWAYAT PENJUALAN =====")
+
+        cur.execute("""
+            SELECT
+                p.tanggal_penjualan,
+                b.nama_bibit,
+                dp.jumlah_bibit,
+                dp.harga_jual,
+                p.total_penjualan,
+                p.metode_pembayaran
+            FROM penjualan p
+            JOIN detail_penjualan dp
+                ON p.id_penjualan = dp.id_penjualan
+            JOIN bibit b
+                ON dp.id_bibit = b.id_bibit
+            ORDER BY p.id_penjualan DESC
+        """)
+
+        riwayat_penjualan = cur.fetchall()
+
+        if len(riwayat_penjualan) == 0:
+            print("Belum ada transaksi penjualan.")
+
+        else:
+            for data in riwayat_penjualan:
+                print("------------------------------")
+                print("Tanggal :", data[0])
+                print("Bibit   :", data[1])
+                print("Jumlah  :", data[2])
+                print(f"Harga   : Rp{data[3]:,}")
+                print(f"Total   : Rp{data[4]:,}")
+                print("Metode  :", data[5])
+                input("\nTekan ENTER untuk kembali ke menu...")
+
+    except Exception as e:
+        print("Terjadi kesalahan:", e)
+
+    finally:
+        cur.close()
+        conn.close()
+
+# TRANSAKSI PENJUALAN BIBIT
+def transaksi_penjualan_bibit(id_users):
+    print("\n===== TRANSAKSI PENJUALAN BIBIT =====")
+
+    conn, cur = connectDB()
+
+    try:
+        # Menampilkan data bibit
+        tampilkanBibit()
+
+        id_bibit = input(
+            "\nMasukkan ID bibit yang dijual: "
+        )
+
+        # Mengambil data bibit
+        cur.execute("""
+            SELECT id_bibit, nama_bibit, harga_jual, stok
+            FROM bibit
+            WHERE id_bibit = %s
+            FOR UPDATE
+        """, (id_bibit,))
+
+        data_bibit = cur.fetchone()
+
+        if data_bibit is None:
+            print("Bibit tidak ditemukan!")
+            return
+
+        nama_bibit = data_bibit[1]
+        harga = data_bibit[2]
+        stok = data_bibit[3]
+
+        jumlah = input_angka("Jumlah bibit yang dijual: ")
+
+        if jumlah <= 0:
+            print("Jumlah bibit harus lebih dari 0!")
+            return
+
+        # Mengecek stok
+        if jumlah > stok:
+            print("Stok bibit tidak mencukupi!")
+            print("Stok tersedia:", stok)
+            return
+
+        total = jumlah * harga
+
+        print("\n===== DETAIL PENJUALAN =====")
+        print("Nama bibit :", nama_bibit)
+        print("Jumlah     :", jumlah)
+        print(f"Harga      : Rp{harga:,}")
+        print(f"Total      : Rp{total:,}")
+
+        metode = input(
+            "\nMetode pembayaran (Tunai/Transfer): "
+        ).capitalize()
+
+        if metode not in ["Tunai", "Transfer"]:
+            print("Metode pembayaran tidak valid!")
+            return
+
+        uang = 0
+        kembalian = 0
+
+        if metode == "Tunai":
+            uang = input_angka(
+                "Uang pembayaran pelanggan: "
+            )
+
+            if uang < total:
+                print("Uang pelanggan tidak mencukupi!")
+                return
+
+            kembalian = uang - total
+
+        konfirmasi = input(
+            "\nSimpan transaksi? (ya/tidak): "
+        ).lower()
+
+        if konfirmasi == "ya":
+
+            # Menyimpan transaksi utama
+            cur.execute("""
+                INSERT INTO penjualan
+                (tanggal_penjualan, total_penjualan,
+                 metode_pembayaran, jumlah, id_users)
+                VALUES (CURRENT_DATE, %s, %s, %s, %s)
+                RETURNING id_penjualan
+            """, (
+                total,
+                metode,
+                jumlah,
+                id_users
+            ))
+
+            id_penjualan = cur.fetchone()[0]
+
+            # Menyimpan detail penjualan
+            cur.execute("""
+                INSERT INTO detail_penjualan
+                (jumlah_bibit, harga_jual,
+                 id_penjualan, id_bibit)
+                VALUES (%s, %s, %s, %s)
+            """, (
+                jumlah,
+                harga,
+                id_penjualan,
+                id_bibit
+            ))
+
+            # Mengurangi stok bibit
+            cur.execute("""
+                UPDATE bibit
+                SET stok = stok - %s
+                WHERE id_bibit = %s
+            """, (jumlah, id_bibit))
+
+            conn.commit()
+
+            print("\n===== PEMBAYARAN BERHASIL =====")
+            print(f"Total belanja : Rp{total:,}")
+
+            if metode == "Tunai":
+                print(f"Uang bayar    : Rp{uang:,}")
+                print(f"Kembalian     : Rp{kembalian:,}")
+
+            print("Metode bayar  :", metode)
+            print("Penjualan berhasil disimpan!")
+
+        else:
+            conn.rollback()
+            print("Transaksi penjualan dibatalkan.")
+
+    except Exception as e:
+        conn.rollback()
+        print("Terjadi kesalahan:", e)
+
+    finally:
+        cur.close()
+        conn.close()
