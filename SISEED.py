@@ -46,6 +46,34 @@ def connectDB():
     except Exception as error:
         print("Koneksi database gagal:", error)
         return None, None
+
+def login():
+    tampilkan_header()
+    print("======= LOGIN SISEED =======")
+
+    username = input("Username: ")
+    password = input("Password: ")
+
+    conn , cur = connectDB()
+
+    cur.execute("""
+        SELECT Users.ID_Users, Users.Nama_Users, Role.Nama_Role
+        FROM Users
+        JOIN Role ON Users.ID_Role = Role.ID_Role
+        WHERE Users.Username = %s AND Users.Password = %s
+    """, (username, password))
+    data = cur.fetchone()
+
+    if data:
+        print("\nLogin Berhasil!")
+        print("Selamat Datang di SISEED", data[1])
+    
+        menu_utama(data[0], data[1], data[2])
+    else:
+        print("\nUsername atau Password Salah!, Silahkan coba lagi!")
+
+    cur.close()
+    
 #menu utama
 def menu_utama(id_users, nama, role):
     while True:
