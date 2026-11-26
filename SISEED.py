@@ -204,7 +204,7 @@ def menu_awal():
 #menjalankan menu awal program
 menu_awal()
 
-#CITRA
+
 #pengelolaan akun oleh pemilik toko 
 # ================= PENGELOLAAN DATA BIBIT =================
 # Menampilkan seluruh data bibit
